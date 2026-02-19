@@ -1,14 +1,11 @@
 // ============================================================
-// game.js — DAMAS ONLINE THE CRIS IF
+// game.js — DAMAS ONLINE THE CRIS IF (VERSION FINAL)
 // ============================================================
 
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
 import { getDatabase, ref, set, get, onValue, update }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
 
-// ============================================================
-// FIREBASE CONFIG (mismo que Ludo)
-// ============================================================
 const firebaseConfig = {
   apiKey: "AIzaSyACr8sCnegUV0aqO6Ubrol7KMoq1wcJ_Pg",
   authDomain: "ludo-thecrisif.firebaseapp.com",
@@ -23,26 +20,22 @@ const app = initializeApp(firebaseConfig);
 const db  = getDatabase(app);
 
 // ============================================================
-// CONSTANTES
+// VARIABLES GLOBALES
 // ============================================================
 const ROWS = 8, COLS = 8;
 const canvas = document.getElementById("board");
 const ctx    = canvas.getContext("2d");
 
-// ============================================================
-// ESTADO LOCAL
-// ============================================================
-let myColor  = "white"; // "white" o "black"
-let myName   = "Jugador";
-let myRole   = null;    // "host" o "guest"
-let roomId   = null;
+let myColor   = "white";
+let myName    = "Jugador";
+let myRole    = null;
+let roomId    = null;
 let gameState = null;
-let selected  = null;   // [row, col] pieza seleccionada
+let selected  = null;
 let myTurn    = false;
-let forcedCaptures = []; // piezas que DEBEN capturar
 
 // ============================================================
-// LOBBY — seleccionar pieza
+// LOBBY
 // ============================================================
 window.selectPiece = function(el) {
   document.querySelectorAll(".piece-opt").forEach(b => b.classList.remove("selected"));
@@ -50,28 +43,25 @@ window.selectPiece = function(el) {
   myColor = el.dataset.color;
 };
 
-// ============================================================
-// CREAR SALA
-// ============================================================
 window.createRoom = async function() {
   myName = document.getElementById("player-name").value.trim() || "Cris";
   roomId = Math.floor(1000 + Math.random() * 9000).toString();
   myRole = "host";
+  myColor = document.querySelector(".piece-opt.selected").dataset.color;
 
-  const state = buildInitialState();
-  state.host   = { name: myName, color: myColor };
-  state.turn   = "white"; // blancas siempre empiezan
-  state.status = "waiting";
+  const board = buildBoard();
+  await set(ref(db, `damas/${roomId}`), {
+    board,
+    turn:   "white",
+    status: "waiting",
+    host:   { name: myName, color: myColor }
+  });
 
-  await set(ref(db, `damas/${roomId}`), state);
   document.getElementById("room-code-text").textContent = roomId;
   document.getElementById("room-display").style.display = "block";
   listenRoom();
 };
 
-// ============================================================
-// UNIRSE A SALA
-// ============================================================
 window.joinRoom = async function() {
   myName = document.getElementById("player-name").value.trim() || "Amigo";
   roomId = document.getElementById("room-input").value.trim();
@@ -79,10 +69,11 @@ window.joinRoom = async function() {
 
   const snap = await get(ref(db, `damas/${roomId}`));
   if(!snap.exists()) { showToast("❌ Sala no encontrada"); return; }
-  const data = snap.val();
-  if(data.guest) { showToast("❌ Sala llena"); return; }
 
-  // El guest toma el color contrario al host
+  const data = snap.val();
+  if(data.status === "playing") { showToast("❌ Sala llena"); return; }
+
+  // Guest toma el color contrario al host
   myColor = data.host.color === "white" ? "black" : "white";
   myRole  = "guest";
 
@@ -90,41 +81,35 @@ window.joinRoom = async function() {
     guest:  { name: myName, color: myColor },
     status: "playing"
   });
+
   listenRoom();
 };
 
 // ============================================================
-// ESTADO INICIAL DEL TABLERO
+// CONSTRUIR TABLERO INICIAL
 // ============================================================
-// Firebase convierte arrays a objetos, esto los convierte de vuelta
-function fixBoard(board) {
-  if(!board) return buildInitialState().board;
-  const fixed = [];
-  for(let r = 0; r < ROWS; r++) {
-    fixed[r] = [];
-    for(let c = 0; c < COLS; c++) {
-      fixed[r][c] = (board[r] && board[r][c]) ? board[r][c] : null;
-    }
-  }
-  return fixed;
-}
-
-function buildInitialState() {
-  // board[r][c] = null | { color:"white"|"black", king:false }
-  const board = [];
-  for(let r = 0; r < ROWS; r++) {
-    board[r] = [];
-    for(let c = 0; c < COLS; c++) {
+function buildBoard() {
+  // Guardamos como array plano de 64 para evitar problemas con Firebase
+  // Índice = r*8 + c
+  const board = new Array(64).fill(null);
+  for(let r = 0; r < 8; r++) {
+    for(let c = 0; c < 8; c++) {
       if((r + c) % 2 === 1) {
-        if(r < 3)      board[r][c] = { color:"black", king:false };
-        else if(r > 4) board[r][c] = { color:"white", king:false };
-        else           board[r][c] = null;
-      } else {
-        board[r][c] = null;
+        if(r < 3)      board[r*8+c] = { color:"black", king:false };
+        else if(r > 4) board[r*8+c] = { color:"white", king:false };
       }
     }
   }
-  return { board };
+  return board;
+}
+
+function getCell(board, r, c) {
+  if(r < 0 || r >= 8 || c < 0 || c >= 8) return undefined;
+  return board[r*8+c] || null;
+}
+
+function setCell(board, r, c, val) {
+  board[r*8+c] = val;
 }
 
 // ============================================================
@@ -141,15 +126,15 @@ function listenRoom() {
     }
 
     if(data.status === "playing" || data.status === "won") {
-      myTurn = data.turn === myColor;
+      myTurn  = (data.turn === myColor);
       selected = null;
-      data.board = fixBoard(data.board);
-      forcedCaptures = myTurn ? getCapturablePieces(data.board, myColor) : [];
       drawBoard(data.board);
       updateUI(data);
     }
 
-    if(data.status === "won") showWin(data.winner === myColor);
+    if(data.status === "won") {
+      showWin(data.winner === myColor);
+    }
   });
 }
 
@@ -160,21 +145,16 @@ function startGame(data) {
   document.getElementById("lobby").style.display = "none";
   document.getElementById("game").style.display  = "block";
 
-  const host  = data.host  || {};
-  const guest = data.guest || {};
-
-  // Mi color y el del rival
-  const myC   = myColor === "white" ? "#e8e0d0" : "#222222";
-  const oppC  = myColor === "white" ? "#222222" : "#e8e0d0";
+  const host    = data.host  || {};
+  const guest   = data.guest || {};
   const oppName = myRole === "host" ? (guest.name || "Rival") : (host.name || "Rival");
 
-  document.getElementById("my-dot").style.background  = myC;
-  document.getElementById("opp-dot").style.background = oppC;
-  document.getElementById("my-dot").style.border      = "2px solid rgba(255,255,255,0.3)";
-  document.getElementById("opp-dot").style.border     = "2px solid rgba(255,255,255,0.3)";
+  document.getElementById("my-dot").style.background  = myColor === "white" ? "#e8e0d0" : "#222";
+  document.getElementById("opp-dot").style.background = myColor === "white" ? "#222" : "#e8e0d0";
   document.getElementById("my-name-label").textContent  = myName;
   document.getElementById("opp-name-label").textContent = oppName;
 
+  myTurn = (data.turn === myColor);
   drawBoard(data.board);
   updateUI(data);
 }
@@ -183,26 +163,26 @@ function startGame(data) {
 // ACTUALIZAR UI
 // ============================================================
 function updateUI(data) {
-  const turnLbl  = document.getElementById("turn-label");
-  const statusEl = document.getElementById("status-msg");
-
-  // Contar piezas
+  const board = data.board;
   let myCount = 0, oppCount = 0;
   const oppColor = myColor === "white" ? "black" : "white";
-  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
-    const p = data.board[r]?.[c];
+
+  for(let i = 0; i < 64; i++) {
+    const p = board[i];
     if(!p) continue;
     if(p.color === myColor) myCount++;
     else oppCount++;
   }
+
   document.getElementById("my-count").textContent  = myCount;
   document.getElementById("opp-count").textContent = oppCount;
 
+  const turnLbl  = document.getElementById("turn-label");
+  const statusEl = document.getElementById("status-msg");
+
   if(myTurn) {
     turnLbl.textContent  = "⚔️ Tu turno";
-    statusEl.textContent = forcedCaptures.length > 0
-      ? "¡Captura obligatoria! Elige una pieza dorada"
-      : "Selecciona una pieza para mover";
+    statusEl.textContent = "Selecciona una pieza para mover";
   } else {
     const oppData = myRole === "host" ? data.guest : data.host;
     const oppName = oppData ? oppData.name : "Rival";
@@ -212,34 +192,39 @@ function updateUI(data) {
 }
 
 // ============================================================
-// CLICK EN EL TABLERO
+// CLICK EN TABLERO
 // ============================================================
 window.handleClick = function(e) {
   if(!myTurn || !gameState) return;
+
   const rect   = canvas.getBoundingClientRect();
-  const scaleX = canvas.width / rect.width;
+  const scaleX = canvas.width  / rect.width;
   const scaleY = canvas.height / rect.height;
   const mx     = (e.clientX - rect.left) * scaleX;
   const my2    = (e.clientY - rect.top)  * scaleY;
-  const cs     = canvas.width / COLS;
+  const cs     = canvas.width / 8;
 
-  // Para las negras se invierte la perspectiva
   let clickR = Math.floor(my2 / cs);
   let clickC = Math.floor(mx / cs);
+
+  // Las negras ven el tablero al revés
   if(myColor === "black") {
-    clickR = ROWS - 1 - clickR;
-    clickC = COLS - 1 - clickC;
+    clickR = 7 - clickR;
+    clickC = 7 - clickC;
   }
 
-  const board  = gameState.board;
-  const cell   = board[clickR]?.[clickC];
+  const board = gameState.board;
+  const cell  = getCell(board, clickR, clickC);
   const isMyPiece = cell && cell.color === myColor;
 
-  // Si hay captura forzada, solo se puede elegir esas piezas
+  // SELECCIONAR PIEZA
   if(selected === null) {
     if(!isMyPiece) return;
-    if(forcedCaptures.length > 0 && !forcedCaptures.some(([r,c])=>r===clickR&&c===clickC)) {
-      showToast("⚠️ ¡Debes capturar!"); return;
+    // Verificar si hay capturas forzadas
+    const forced = getForcedPieces(board, myColor);
+    if(forced.length > 0 && !forced.some(([r,c]) => r===clickR && c===clickC)) {
+      showToast("⚠️ ¡Debes capturar primero!");
+      return;
     }
     selected = [clickR, clickC];
     drawBoard(board);
@@ -250,26 +235,25 @@ window.handleClick = function(e) {
 
   // Click en otra pieza propia → cambiar selección
   if(isMyPiece) {
-    if(forcedCaptures.length > 0 && !forcedCaptures.some(([r,c])=>r===clickR&&c===clickC)) {
-      showToast("⚠️ ¡Debes capturar!"); return;
+    const forced = getForcedPieces(board, myColor);
+    if(forced.length > 0 && !forced.some(([r,c]) => r===clickR && c===clickC)) {
+      showToast("⚠️ ¡Debes capturar primero!");
+      return;
     }
     selected = [clickR, clickC];
     drawBoard(board);
     return;
   }
 
-  // Intentar mover a la celda clickeada
-  const piece = board[sr][sc];
+  // Intentar mover o capturar
+  const piece = getCell(board, sr, sc);
   const caps  = getCaptures(sr, sc, piece, board);
   const moves = caps.length > 0 ? [] : getMoves(sr, sc, piece, board);
 
-  const isCapture = caps.some(([tr,tc]) => tr===clickR && tc===clickC);
-  const isMove    = moves.some(([tr,tc]) => tr===clickR && tc===clickC);
-
-  if(isCapture) {
-    executeCapture(sr, sc, clickR, clickC, board, piece);
-  } else if(isMove && forcedCaptures.length === 0) {
-    executeMove(sr, sc, clickR, clickC, board, piece);
+  if(caps.some(([r,c]) => r===clickR && c===clickC)) {
+    doCapture(sr, sc, clickR, clickC, board, piece);
+  } else if(moves.some(([r,c]) => r===clickR && c===clickC)) {
+    doMove(sr, sc, clickR, clickC, board, piece);
   } else {
     selected = null;
     drawBoard(board);
@@ -277,20 +261,17 @@ window.handleClick = function(e) {
 };
 
 // ============================================================
-// EJECUTAR MOVIMIENTO
+// MOVER
 // ============================================================
-async function executeMove(sr, sc, tr, tc, board, piece) {
-  const nb = deepCopy(board);
-  nb[tr][tc] = nb[sr][sc];
-  nb[sr][sc] = null;
-  promoteIfNeeded(tr, tc, nb);
+async function doMove(sr, sc, tr, tc, board, piece) {
+  const nb = [...board];
+  setCell(nb, tr, tc, getCell(nb, sr, sc));
+  setCell(nb, sr, sc, null);
+  promote(nb, tr, tc);
 
-  const winner = checkWin(nb);
-  const updates = {
-    board: nb,
-    turn:  myColor === "white" ? "black" : "white",
-    lastMove: { from:[sr,sc], to:[tr,tc] }
-  };
+  const winner  = checkWin(nb);
+  const nextTurn = myColor === "white" ? "black" : "white";
+  const updates = { board: nb, turn: nextTurn };
   if(winner) { updates.status = "won"; updates.winner = winner; }
 
   selected = null;
@@ -298,36 +279,31 @@ async function executeMove(sr, sc, tr, tc, board, piece) {
 }
 
 // ============================================================
-// EJECUTAR CAPTURA
+// CAPTURAR
 // ============================================================
-async function executeCapture(sr, sc, tr, tc, board, piece) {
-  const nb = deepCopy(board);
+async function doCapture(sr, sc, tr, tc, board, piece) {
+  const nb = [...board];
   const mr = (sr + tr) / 2;
   const mc = (sc + tc) / 2;
-  nb[tr][tc] = nb[sr][sc];
-  nb[sr][sc] = null;
-  nb[mr][mc] = null;
-  promoteIfNeeded(tr, tc, nb);
+  setCell(nb, tr, tc, getCell(nb, sr, sc));
+  setCell(nb, sr, sc, null);
+  setCell(nb, mr, mc, null);
+  promote(nb, tr, tc);
 
-  // Verificar si puede seguir capturando (captura múltiple)
-  const moreCaps = getCaptures(tr, tc, nb[tr][tc], nb);
+  // Verificar si puede seguir capturando
+  const moreCaps = getCaptures(tr, tc, getCell(nb, tr, tc), nb);
   if(moreCaps.length > 0) {
-    // Puede seguir — actualizar tablero y mantener turno
     gameState.board = nb;
-    forcedCaptures  = [[tr, tc]];
-    selected        = [tr, tc];
+    selected = [tr, tc];
     drawBoard(nb);
-    await update(ref(db, `damas/${roomId}`), { board: nb, lastMove:{ from:[sr,sc], to:[tr,tc] } });
+    await update(ref(db, `damas/${roomId}`), { board: nb });
     showToast("💥 ¡Sigue capturando!");
     return;
   }
 
-  const winner = checkWin(nb);
-  const updates = {
-    board: nb,
-    turn:  myColor === "white" ? "black" : "white",
-    lastMove: { from:[sr,sc], to:[tr,tc] }
-  };
+  const winner  = checkWin(nb);
+  const nextTurn = myColor === "white" ? "black" : "white";
+  const updates = { board: nb, turn: nextTurn };
   if(winner) { updates.status = "won"; updates.winner = winner; }
 
   selected = null;
@@ -335,275 +311,214 @@ async function executeCapture(sr, sc, tr, tc, board, piece) {
 }
 
 // ============================================================
-// REGLAS DE MOVIMIENTO
+// REGLAS
 // ============================================================
 function getMoves(r, c, piece, board) {
   const dirs = piece.king
     ? [[-1,-1],[-1,1],[1,-1],[1,1]]
-    : piece.color === "white"
-      ? [[-1,-1],[-1,1]]
-      : [[1,-1],[1,1]];
-  const moves = [];
-  for(const [dr,dc] of dirs) {
-    const tr = r+dr, tc = c+dc;
-    if(inBounds(tr,tc) && !board[tr][tc]) moves.push([tr,tc]);
-  }
-  return moves;
+    : piece.color === "white" ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]];
+  return dirs
+    .map(([dr,dc]) => [r+dr, c+dc])
+    .filter(([tr,tc]) => tr>=0&&tr<8&&tc>=0&&tc<8 && !getCell(board,tr,tc));
 }
 
 function getCaptures(r, c, piece, board) {
   const dirs = piece.king
-    ? [[-2,-2],[-2,2],[2,-2],[2,2]]
-    : piece.color === "white"
-      ? [[-2,-2],[-2,2]]
-      : [[2,-2],[2,2]];
+    ? [[-1,-1],[-1,1],[1,-1],[1,1]]
+    : piece.color === "white" ? [[-1,-1],[-1,1]] : [[1,-1],[1,1]];
   const caps = [];
   for(const [dr,dc] of dirs) {
-    const mr = r+dr/2, mc = c+dc/2;
-    const tr = r+dr,   tc = c+dc;
-    if(inBounds(tr,tc)) {
-      const mid = board[mr]?.[mc];
-      if(mid && mid.color !== piece.color && !board[tr][tc]) {
-        caps.push([tr,tc]);
-      }
-    }
+    const mr=r+dr, mc=c+dc, tr=r+dr*2, tc=c+dc*2;
+    if(tr<0||tr>=8||tc<0||tc>=8) continue;
+    const mid = getCell(board,mr,mc);
+    const dst = getCell(board,tr,tc);
+    if(mid && mid.color !== piece.color && !dst) caps.push([tr,tc]);
   }
   return caps;
 }
 
-// Todas las piezas de un color que pueden capturar
-function getCapturablePieces(board, color) {
-  const list = [];
-  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
-    const p = board[r]?.[c];
-    if(p && p.color === color && getCaptures(r,c,p,board).length > 0) list.push([r,c]);
+function getForcedPieces(board, color) {
+  const forced = [];
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
+    const p = getCell(board,r,c);
+    if(p && p.color === color && getCaptures(r,c,p,board).length > 0) forced.push([r,c]);
   }
-  return list;
+  return forced;
 }
 
-// ============================================================
-// PROMOCIÓN A DAMA
-// ============================================================
-function promoteIfNeeded(r, c, board) {
-  const p = board[r][c];
+function promote(board, r, c) {
+  const p = getCell(board,r,c);
   if(!p) return;
-  if(p.color === "white" && r === 0) p.king = true;
-  if(p.color === "black" && r === 7) p.king = true;
+  if(p.color==="white" && r===0) p.king=true;
+  if(p.color==="black" && r===7) p.king=true;
 }
 
-// ============================================================
-// VERIFICAR VICTORIA
-// ============================================================
 function checkWin(board) {
-  let whites = 0, blacks = 0;
-  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
-    const p = board[r]?.[c];
+  let whites=0, blacks=0;
+  for(let i=0;i<64;i++) {
+    const p=board[i];
     if(!p) continue;
     if(p.color==="white") whites++;
     else blacks++;
   }
-  if(whites === 0) return "black";
-  if(blacks === 0) return "white";
-
-  // Sin movimientos
-  const whiteCanMove = canAnyMove(board, "white");
-  const blackCanMove = canAnyMove(board, "black");
-  if(!whiteCanMove) return "black";
-  if(!blackCanMove) return "white";
+  if(whites===0) return "black";
+  if(blacks===0) return "white";
+  // Sin movimientos posibles
+  const wMove = canMove(board,"white");
+  const bMove = canMove(board,"black");
+  if(!wMove) return "black";
+  if(!bMove) return "white";
   return null;
 }
 
-function canAnyMove(board, color) {
-  for(let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
-    const p = board[r]?.[c];
-    if(p && p.color === color) {
-      if(getCaptures(r,c,p,board).length > 0) return true;
-      if(getMoves(r,c,p,board).length > 0) return true;
+function canMove(board, color) {
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++) {
+    const p=getCell(board,r,c);
+    if(p && p.color===color) {
+      if(getCaptures(r,c,p,board).length>0) return true;
+      if(getMoves(r,c,p,board).length>0) return true;
     }
   }
   return false;
 }
 
 // ============================================================
-// DIBUJAR TABLERO — alta calidad
+// DIBUJAR TABLERO
 // ============================================================
 function drawBoard(board) {
   const W  = canvas.width;
-  const cs = W / COLS;
-  ctx.clearRect(0, 0, W, W);
+  const cs = W / 8;
+  ctx.clearRect(0,0,W,W);
 
   // Casillas
-  for(let r=0;r<ROWS;r++) {
-    for(let c=0;c<COLS;c++) {
-      const dr = myColor === "black" ? ROWS-1-r : r;
-      const dc = myColor === "black" ? COLS-1-c : c;
-      const x  = c * cs, y = r * cs;
-      const isDark = (dr + dc) % 2 === 1;
+  for(let r=0;r<8;r++) {
+    for(let c=0;c<8;c++) {
+      const dr = myColor==="black" ? 7-r : r;
+      const dc = myColor==="black" ? 7-c : c;
+      const x  = c*cs, y = r*cs;
+      const dark = (dr+dc)%2===1;
 
-      if(isDark) {
-        // Casilla oscura con gradiente
-        const grad = ctx.createLinearGradient(x,y,x+cs,y+cs);
-        grad.addColorStop(0, "#2a1600");
-        grad.addColorStop(1, "#1a0c00");
-        ctx.fillStyle = grad;
+      const grad = ctx.createLinearGradient(x,y,x+cs,y+cs);
+      if(dark) {
+        grad.addColorStop(0,"#2a1600");
+        grad.addColorStop(1,"#1a0c00");
       } else {
-        const grad = ctx.createLinearGradient(x,y,x+cs,y+cs);
-        grad.addColorStop(0, "#f5e6c8");
-        grad.addColorStop(1, "#e8d4a8");
-        ctx.fillStyle = grad;
+        grad.addColorStop(0,"#f5e6c8");
+        grad.addColorStop(1,"#e8d4a8");
       }
-      ctx.fillRect(x, y, cs, cs);
-
-      // Borde sutil
-      ctx.strokeStyle = isDark ? "rgba(0,0,0,0.3)" : "rgba(255,255,255,0.1)";
-      ctx.lineWidth = 0.5;
-      ctx.strokeRect(x, y, cs, cs);
+      ctx.fillStyle=grad;
+      ctx.fillRect(x,y,cs,cs);
+      ctx.strokeStyle=dark?"rgba(0,0,0,0.3)":"rgba(255,255,255,0.1)";
+      ctx.lineWidth=0.5;
+      ctx.strokeRect(x,y,cs,cs);
     }
   }
 
-  // Resaltar seleccionada y movimientos posibles
+  // Resaltar seleccionada
   if(selected && myTurn) {
-    const [sr, sc] = selected;
-    const dr = myColor === "black" ? ROWS-1-sr : sr;
-    const dc = myColor === "black" ? COLS-1-sc : sc;
-    const x  = dc*cs, y = dr*cs;
+    const [sr,sc]=selected;
+    const dr=myColor==="black"?7-sr:sr;
+    const dc=myColor==="black"?7-sc:sc;
+    ctx.fillStyle="rgba(240,192,64,0.4)";
+    ctx.fillRect(dc*cs,dr*cs,cs,cs);
+    ctx.strokeStyle="#f0c040";
+    ctx.lineWidth=2.5;
+    ctx.strokeRect(dc*cs+1,dr*cs+1,cs-2,cs-2);
 
-    // Celda seleccionada
-    ctx.fillStyle = "rgba(240,192,64,0.4)";
-    ctx.fillRect(x, y, cs, cs);
-    ctx.strokeStyle = "#f0c040";
-    ctx.lineWidth = 2.5;
-    ctx.strokeRect(x+1, y+1, cs-2, cs-2);
-
-    const piece = board[sr][sc];
+    const piece=getCell(board,sr,sc);
     if(piece) {
-      const caps  = getCaptures(sr, sc, piece, board);
-      const moves = caps.length > 0 ? [] : getMoves(sr, sc, piece, board);
-      const hints = [...caps, ...moves];
-      hints.forEach(([hr,hc]) => {
-        const hdr = myColor === "black" ? ROWS-1-hr : hr;
-        const hdc = myColor === "black" ? COLS-1-hc : hc;
-        const hx  = hdc*cs + cs/2, hy = hdr*cs + cs/2;
+      const caps  = getCaptures(sr,sc,piece,board);
+      const moves = caps.length>0?[]:getMoves(sr,sc,piece,board);
+      [...caps,...moves].forEach(([hr,hc])=>{
+        const hdr=myColor==="black"?7-hr:hr;
+        const hdc=myColor==="black"?7-hc:hc;
         ctx.beginPath();
-        ctx.arc(hx, hy, cs*0.2, 0, Math.PI*2);
-        ctx.fillStyle = caps.length>0 ? "rgba(255,80,80,0.6)" : "rgba(240,192,64,0.5)";
+        ctx.arc(hdc*cs+cs/2,hdr*cs+cs/2,cs*0.2,0,Math.PI*2);
+        ctx.fillStyle=caps.length>0?"rgba(255,80,80,0.6)":"rgba(240,192,64,0.5)";
         ctx.fill();
       });
     }
   }
 
-  // Resaltar piezas con captura obligatoria
-  if(myTurn && forcedCaptures.length > 0) {
-    forcedCaptures.forEach(([fr,fc]) => {
-      if(selected && selected[0]===fr && selected[1]===fc) return;
-      const dr = myColor === "black" ? ROWS-1-fr : fr;
-      const dc = myColor === "black" ? COLS-1-fc : fc;
-      const x  = dc*cs, y = dr*cs;
-      ctx.strokeStyle = "#ff4444";
-      ctx.lineWidth = 2;
+  // Capturas forzadas (borde rojo parpadeante)
+  if(myTurn) {
+    const forced=getForcedPieces(board,myColor);
+    forced.forEach(([fr,fc])=>{
+      if(selected&&selected[0]===fr&&selected[1]===fc) return;
+      const dr=myColor==="black"?7-fr:fr;
+      const dc=myColor==="black"?7-fc:fc;
+      ctx.strokeStyle="#ff4444";
+      ctx.lineWidth=2;
       ctx.setLineDash([4,3]);
-      ctx.strokeRect(x+1, y+1, cs-2, cs-2);
+      ctx.strokeRect(dc*cs+1,dr*cs+1,cs-2,cs-2);
       ctx.setLineDash([]);
     });
   }
 
-  // Dibujar piezas
-  for(let r=0;r<ROWS;r++) {
-    for(let c=0;c<COLS;c++) {
-      const piece = board[r]?.[c];
+  // Piezas
+  for(let r=0;r<8;r++) {
+    for(let c=0;c<8;c++) {
+      const piece=getCell(board,r,c);
       if(!piece) continue;
-      const dr = myColor === "black" ? ROWS-1-r : r;
-      const dc = myColor === "black" ? COLS-1-c : c;
-      const x  = dc*cs + cs/2;
-      const y  = dr*cs + cs/2;
-      drawPiece(x, y, cs*0.42, piece);
+      const dr=myColor==="black"?7-r:r;
+      const dc=myColor==="black"?7-c:c;
+      drawPiece(dc*cs+cs/2, dr*cs+cs/2, cs*0.42, piece);
     }
   }
 }
 
-// ============================================================
-// DIBUJAR PIEZA EN ALTA CALIDAD
-// ============================================================
-function drawPiece(x, y, r, piece) {
-  const isWhite = piece.color === "white";
-
+function drawPiece(x,y,r,piece) {
+  const isWhite=piece.color==="white";
   // Sombra
-  ctx.beginPath();
-  ctx.arc(x+2, y+3, r, 0, Math.PI*2);
-  ctx.fillStyle = "rgba(0,0,0,0.5)";
-  ctx.fill();
-
-  // Cuerpo con gradiente radial 3D
-  const grad = ctx.createRadialGradient(x-r*0.3, y-r*0.3, r*0.05, x, y, r);
-  if(isWhite) {
-    grad.addColorStop(0, "#ffffff");
-    grad.addColorStop(0.4, "#ede5d5");
-    grad.addColorStop(0.8, "#c8bfb0");
-    grad.addColorStop(1, "#9e9286");
-  } else {
-    grad.addColorStop(0, "#888888");
-    grad.addColorStop(0.4, "#333333");
-    grad.addColorStop(0.8, "#111111");
-    grad.addColorStop(1, "#000000");
-  }
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI*2);
-  ctx.fillStyle = grad;
-  ctx.fill();
-
-  // Borde
-  ctx.strokeStyle = isWhite ? "rgba(120,100,80,0.5)" : "rgba(0,0,0,0.8)";
-  ctx.lineWidth   = 1.5;
-  ctx.stroke();
-
-  // Brillo superior
-  const shine = ctx.createRadialGradient(x-r*0.3, y-r*0.35, 0, x-r*0.2, y-r*0.2, r*0.6);
-  shine.addColorStop(0, isWhite ? "rgba(255,255,255,0.7)" : "rgba(255,255,255,0.25)");
-  shine.addColorStop(1, "rgba(255,255,255,0)");
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI*2);
-  ctx.fillStyle = shine;
-  ctx.fill();
-
-  // Anillo interno
-  ctx.beginPath();
-  ctx.arc(x, y, r*0.72, 0, Math.PI*2);
-  ctx.strokeStyle = isWhite ? "rgba(160,140,120,0.4)" : "rgba(255,255,255,0.12)";
-  ctx.lineWidth   = 1;
-  ctx.stroke();
-
-  // Corona de dama
-  if(piece.king) {
-    ctx.font = `bold ${r*0.85}px serif`;
-    ctx.textAlign    = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle    = isWhite ? "rgba(180,130,20,0.9)" : "rgba(255,210,60,0.9)";
-    ctx.fillText("♛", x, y+1);
+  ctx.beginPath(); ctx.arc(x+2,y+3,r,0,Math.PI*2);
+  ctx.fillStyle="rgba(0,0,0,0.5)"; ctx.fill();
+  // Cuerpo
+  const grad=ctx.createRadialGradient(x-r*0.3,y-r*0.3,r*0.05,x,y,r);
+  if(isWhite){grad.addColorStop(0,"#fff");grad.addColorStop(0.4,"#ede5d5");grad.addColorStop(0.8,"#c8bfb0");grad.addColorStop(1,"#9e9286");}
+  else{grad.addColorStop(0,"#888");grad.addColorStop(0.4,"#333");grad.addColorStop(0.8,"#111");grad.addColorStop(1,"#000");}
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle=grad; ctx.fill();
+  ctx.strokeStyle=isWhite?"rgba(120,100,80,0.5)":"rgba(0,0,0,0.8)";
+  ctx.lineWidth=1.5; ctx.stroke();
+  // Brillo
+  const shine=ctx.createRadialGradient(x-r*0.3,y-r*0.35,0,x-r*0.2,y-r*0.2,r*0.6);
+  shine.addColorStop(0,isWhite?"rgba(255,255,255,0.7)":"rgba(255,255,255,0.25)");
+  shine.addColorStop(1,"rgba(255,255,255,0)");
+  ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.fillStyle=shine; ctx.fill();
+  // Anillo
+  ctx.beginPath(); ctx.arc(x,y,r*0.72,0,Math.PI*2);
+  ctx.strokeStyle=isWhite?"rgba(160,140,120,0.4)":"rgba(255,255,255,0.12)";
+  ctx.lineWidth=1; ctx.stroke();
+  // Corona
+  if(piece.king){
+    ctx.font=`bold ${r*0.85}px serif`;
+    ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillStyle=isWhite?"rgba(180,130,20,0.9)":"rgba(255,210,60,0.9)";
+    ctx.fillText("♛",x,y+1);
   }
 }
 
 // ============================================================
-// VICTORIA
+// WIN
 // ============================================================
 function showWin(iWon) {
-  const ws = document.getElementById("win-screen");
-  ws.style.display = "flex";
-  document.getElementById("win-emoji").textContent = iWon ? "🏆" : "😢";
-  document.getElementById("win-text").textContent  = iWon ? "¡GANASTE!" : "PERDISTE";
-  document.getElementById("win-sub").textContent   = iWon
-    ? "¡Eres el mejor, THE CRIS IF!"
-    : "¡Sigue intentándolo!";
+  const ws=document.getElementById("win-screen");
+  ws.style.display="flex";
+  document.getElementById("win-emoji").textContent=iWon?"🏆":"😢";
+  document.getElementById("win-text").textContent=iWon?"¡GANASTE!":"PERDISTE";
+  document.getElementById("win-sub").textContent=iWon?"¡Eres el mejor, THE CRIS IF!":"¡Sigue intentándolo!";
 }
 
 // ============================================================
 // TOAST
 // ============================================================
 function showToast(msg) {
-  const t = document.getElementById("toast");
-  t.textContent = msg;
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2500);
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.classList.add("show");
+  setTimeout(()=>t.classList.remove("show"),2500);
 }
-window.showToast = showToast;
+window.showToast=showToast;
 
-// =========================
+// Dibujo inicial
+drawBoard(buildBoard());
