@@ -1,95 +1,466 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>DAMAS ONLINE — THE CRIS IF</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>DAMAS — THE CRIS IF</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Crimson+Text:wght@400;600&display=swap');
+:root{--gold:#c9a84c;--dark:#0e0e0e;--dark3:#231e17;}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Crimson Text',serif;background:var(--dark);min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:12px 8px 24px;background-image:radial-gradient(ellipse at 50% 0%,rgba(180,140,40,0.12) 0%,transparent 60%);}
+.header{text-align:center;margin-bottom:14px;}
+.title{font-family:'Cinzel',serif;font-size:clamp(2rem,7vw,3rem);color:var(--gold);letter-spacing:.25em;text-shadow:0 0 30px rgba(201,168,76,.5);}
+.subtitle{font-family:'Cinzel',serif;font-size:clamp(.55rem,2vw,.7rem);color:rgba(201,168,76,.5);letter-spacing:.4em;margin-top:2px;}
+#lobby{width:100%;max-width:400px;}
+.lobby-card{background:var(--dark3);border:1px solid rgba(201,168,76,.2);border-radius:20px;padding:28px 22px;box-shadow:0 20px 60px rgba(0,0,0,.6);}
+.lobby-title{font-family:'Cinzel',serif;color:var(--gold);font-size:1.1rem;text-align:center;margin-bottom:20px;letter-spacing:.1em;}
+.input-group{margin-bottom:14px;}
+.input-group label{display:block;color:rgba(201,168,76,.6);font-size:.65rem;font-family:'Cinzel',serif;letter-spacing:.2em;margin-bottom:6px;}
+.input-group input{width:100%;padding:11px 14px;border-radius:10px;border:1px solid rgba(201,168,76,.2);background:rgba(255,255,255,.05);color:white;font-family:'Crimson Text',serif;font-size:16px;outline:none;transition:border-color .3s;}
+.input-group input:focus{border-color:var(--gold);}
+.input-group input::placeholder{color:rgba(255,255,255,.25);}
+.color-label{font-family:'Cinzel',serif;color:rgba(201,168,76,.6);font-size:.65rem;letter-spacing:.2em;margin-bottom:10px;}
+.piece-picker{display:flex;gap:12px;justify-content:center;margin-bottom:18px;}
+.piece-opt{display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 20px;border-radius:12px;border:1px solid rgba(255,255,255,.1);cursor:pointer;transition:all .2s;color:rgba(255,255,255,.5);font-size:.8rem;font-family:'Cinzel',serif;letter-spacing:.05em;}
+.piece-opt.selected{border-color:var(--gold);background:rgba(201,168,76,.1);color:var(--gold);box-shadow:0 0 12px rgba(201,168,76,.2);}
+.piece-preview{width:36px;height:36px;border-radius:50%;box-shadow:0 4px 12px rgba(0,0,0,.5);}
+.white-piece{background:radial-gradient(circle at 35% 30%,#fff,#d4cfc7 60%,#a09890);border:2px solid #888;}
+.black-piece{background:radial-gradient(circle at 35% 30%,#555,#1c1c1c 60%,#050505);border:2px solid #000;}
+.btn{width:100%;padding:13px;border-radius:12px;border:none;font-family:'Cinzel',serif;font-size:.85rem;letter-spacing:.15em;cursor:pointer;transition:all .2s;margin-top:6px;}
+.btn:hover{transform:translateY(-2px);}
+.btn-create{background:linear-gradient(135deg,var(--gold),#a07828);color:#0e0e0e;box-shadow:0 4px 20px rgba(201,168,76,.3);}
+.btn-join{background:transparent;color:var(--gold);border:1px solid var(--gold)!important;}
+.btn-join:hover{background:rgba(201,168,76,.1);}
+.divider{text-align:center;color:rgba(255,255,255,.2);font-size:.75rem;letter-spacing:.2em;margin:14px 0;}
+.room-code-box{background:rgba(201,168,76,.08);border:1px dashed rgba(201,168,76,.4);border-radius:10px;padding:14px;margin-top:14px;color:var(--gold);font-family:'Cinzel',serif;font-size:2.2rem;letter-spacing:10px;text-align:center;}
+.room-hint{color:rgba(255,255,255,.3);font-size:.8rem;margin-top:6px;text-align:center;}
+.waiting{text-align:center;padding:14px;color:rgba(255,255,255,.4);font-size:.9rem;}
+.waiting span{animation:pulse 1.5s infinite;display:inline-block;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+#game{display:none;width:100%;max-width:620px;}
+.game-header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;margin-bottom:10px;background:var(--dark3);border:1px solid rgba(201,168,76,.15);border-radius:14px;}
+.player-badge{display:flex;align-items:center;gap:8px;}
+.player-badge.reverse{flex-direction:row-reverse;}
+.badge-dot{width:18px;height:18px;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.5);}
+.badge-info{display:flex;flex-direction:column;}
+.badge-name{font-family:'Cinzel',serif;font-size:.7rem;color:rgba(255,255,255,.7);letter-spacing:.05em;}
+.badge-count{font-family:'Cinzel',serif;font-size:1.2rem;color:var(--gold);font-weight:900;}
+.turn-indicator{font-family:'Cinzel',serif;font-size:.75rem;color:var(--gold);text-align:center;letter-spacing:.05em;padding:6px 12px;background:rgba(201,168,76,.08);border-radius:20px;border:1px solid rgba(201,168,76,.2);}
+.board-wrap{width:100%;aspect-ratio:1;padding:10px;background:linear-gradient(145deg,#3d2800,#1a0f00,#3d2800);border-radius:14px;box-shadow:0 0 0 2px #6b4c1e,0 0 0 4px #2a1800,0 20px 60px rgba(0,0,0,.8);}
+canvas#board{width:100%;height:100%;border-radius:6px;display:block;cursor:pointer;}
+.status-bar{text-align:center;margin-top:10px;font-family:'Cinzel',serif;font-size:.8rem;color:rgba(201,168,76,.7);letter-spacing:.1em;min-height:1.4em;}
+#win-screen{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);backdrop-filter:blur(16px);z-index:100;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:20px;gap:16px;}
+.win-emoji{font-size:80px;animation:bounce 1s infinite;}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-18px)}}
+.win-text{font-family:'Cinzel',serif;font-size:clamp(2rem,8vw,3.5rem);color:var(--gold);text-shadow:0 0 40px rgba(201,168,76,.8);letter-spacing:.2em;}
+.win-sub{color:rgba(255,255,255,.5);font-size:1rem;}
+.btn-again{background:linear-gradient(135deg,var(--gold),#a07828);color:#0e0e0e;padding:13px 40px;border-radius:50px;border:none;font-family:'Cinzel',serif;font-size:1rem;letter-spacing:.1em;cursor:pointer;transition:all .2s;margin-top:8px;}
+.btn-again:hover{transform:scale(1.05);}
+.toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(100px);background:rgba(201,168,76,.95);color:#0e0e0e;padding:10px 22px;border-radius:50px;font-family:'Cinzel',serif;font-size:.8rem;z-index:200;transition:transform .4s ease;white-space:nowrap;}
+.toast.show{transform:translateX(-50%) translateY(0);}
+</style>
 </head>
 <body>
 
-  <div class="header">
-    <div class="title">♟ DAMAS</div>
-    <div class="subtitle">THE CRIS IF EDITION</div>
+<div class="header">
+  <div class="title">♟ DAMAS</div>
+  <div class="subtitle">THE CRIS IF EDITION</div>
+</div>
+
+<div id="lobby">
+  <div class="lobby-card">
+    <div class="lobby-title">🎮 ¡A jugar!</div>
+    <div class="input-group">
+      <label>TU NOMBRE</label>
+      <input type="text" id="player-name" placeholder="Escribe tu nombre..." maxlength="12">
+    </div>
+    <div class="color-label">ELIGE TU PIEZA</div>
+    <div class="piece-picker">
+      <div class="piece-opt selected" data-color="white" onclick="selectPiece(this)">
+        <div class="piece-preview white-piece"></div><span>Blancas</span>
+      </div>
+      <div class="piece-opt" data-color="black" onclick="selectPiece(this)">
+        <div class="piece-preview black-piece"></div><span>Negras</span>
+      </div>
+    </div>
+    <button class="btn btn-create" onclick="createRoom()">🏠 CREAR SALA</button>
+    <div class="divider">── O ──</div>
+    <div class="input-group">
+      <label>CÓDIGO DE SALA</label>
+      <input type="text" id="room-input" placeholder="Ej: 4821" maxlength="4" style="text-align:center;font-size:22px;letter-spacing:6px;">
+    </div>
+    <button class="btn btn-join" onclick="joinRoom()">🚀 UNIRSE</button>
+    <div id="room-display" style="display:none;">
+      <div class="room-code-box" id="room-code-text">----</div>
+      <div class="room-hint">📋 Comparte este código con tu amigo</div>
+      <div class="waiting"><span>⏳ Esperando a tu rival...</span></div>
+    </div>
   </div>
+</div>
 
-  <!-- LOBBY -->
-  <div id="lobby">
-    <div class="lobby-card">
-      <div class="lobby-title">🎮 ¡A jugar!</div>
-
-      <div class="input-group">
-        <label>TU NOMBRE</label>
-        <input type="text" id="player-name" placeholder="Escribe tu nombre..." maxlength="12">
+<div id="game">
+  <div class="game-header">
+    <div class="player-badge">
+      <div class="badge-dot" id="my-dot"></div>
+      <div class="badge-info">
+        <span class="badge-name" id="my-name-label">Tú</span>
+        <span class="badge-count" id="my-count">12</span>
       </div>
-
-      <div class="color-label">ELIGE TU PIEZA</div>
-      <div class="piece-picker">
-        <div class="piece-opt selected" data-color="white" onclick="selectPiece(this)">
-          <div class="piece-preview white-piece"></div>
-          <span>Blancas</span>
-        </div>
-        <div class="piece-opt" data-color="black" onclick="selectPiece(this)">
-          <div class="piece-preview black-piece"></div>
-          <span>Negras</span>
-        </div>
-      </div>
-
-      <button class="btn btn-create" onclick="createRoom()">🏠 CREAR SALA</button>
-      <div class="divider">── O ──</div>
-
-      <div class="input-group">
-        <label>CÓDIGO DE SALA</label>
-        <input type="text" id="room-input" placeholder="Ej: 4821" maxlength="4"
-               style="text-align:center;font-size:22px;letter-spacing:6px;">
-      </div>
-      <button class="btn btn-join" onclick="joinRoom()">🚀 UNIRSE</button>
-
-      <div id="room-display" style="display:none;">
-        <div class="room-code-box" id="room-code-text">----</div>
-        <div class="room-hint">📋 Comparte este código con tu amigo</div>
-        <div class="waiting"><span>⏳ Esperando a tu rival...</span></div>
+    </div>
+    <div class="turn-indicator" id="turn-label">Tu turno</div>
+    <div class="player-badge reverse">
+      <div class="badge-dot" id="opp-dot"></div>
+      <div class="badge-info">
+        <span class="badge-name" id="opp-name-label">Rival</span>
+        <span class="badge-count" id="opp-count">12</span>
       </div>
     </div>
   </div>
-
-  <!-- JUEGO -->
-  <div id="game">
-    <div class="game-header">
-      <div class="player-badge" id="badge-me">
-        <div class="badge-dot" id="my-dot"></div>
-        <div class="badge-info">
-          <span class="badge-name" id="my-name-label">Tú</span>
-          <span class="badge-count" id="my-count">12</span>
-        </div>
-      </div>
-      <div class="turn-indicator" id="turn-label">Tu turno</div>
-      <div class="player-badge reverse" id="badge-opp">
-        <div class="badge-dot" id="opp-dot"></div>
-        <div class="badge-info">
-          <span class="badge-name" id="opp-name-label">Rival</span>
-          <span class="badge-count" id="opp-count">12</span>
-        </div>
-      </div>
-    </div>
-
-    <div class="board-wrap">
-      <canvas id="board" width="600" height="600" onclick="handleClick(event)"></canvas>
-    </div>
-
-    <div class="status-bar" id="status-msg">Selecciona una pieza</div>
+  <div class="board-wrap">
+    <canvas id="board" width="600" height="600" onclick="handleClick(event)"></canvas>
   </div>
+  <div class="status-bar" id="status-msg">Selecciona una pieza para mover</div>
+</div>
 
-  <!-- WIN -->
-  <div id="win-screen">
-    <div class="win-emoji" id="win-emoji">🏆</div>
-    <div class="win-text" id="win-text">¡GANASTE!</div>
-    <div class="win-sub" id="win-sub">¡Increíble partida!</div>
-    <button class="btn-again" onclick="location.reload()">🔄 JUGAR DE NUEVO</button>
-  </div>
+<div id="win-screen">
+  <div class="win-emoji" id="win-emoji">🏆</div>
+  <div class="win-text" id="win-text">¡GANASTE!</div>
+  <div class="win-sub" id="win-sub">¡Increíble partida!</div>
+  <button class="btn-again" onclick="location.reload()">🔄 JUGAR DE NUEVO</button>
+</div>
 
-  <div class="toast" id="toast"></div>
+<div class="toast" id="toast"></div>
 
-  <script src="game.js" type="module"></script>
-</body>
-</html>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import { getDatabase, ref, set, get, onValue, update } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+
+// ===== FIREBASE CONFIG =====
+const firebaseConfig = {
+  apiKey: "AIzaSyACr8sCnegUV0aqO6Ubrol7KMoq1wcJ_Pg",
+  authDomain: "ludo-thecrisif.firebaseapp.com",
+  databaseURL: "https://ludo-thecrisif-default-rtdb.firebaseio.com",
+  projectId: "ludo-thecrisif",
+  storageBucket: "ludo-thecrisif.firebasestorage.app",
+  messagingSenderId: "643959425506",
+  appId: "1:643959425506:web:c0515d6e4d007ce611d1bb"
+};
+
+const app = initializeApp(firebaseConfig);
+const db  = getDatabase(app);
+
+// ===== ESTADO =====
+const canvas = document.getElementById("board");
+const ctx    = canvas.getContext("2d");
+let myColor = "white", myName = "", myRole = null, roomId = null;
+let gameState = null, selected = null, myTurn = false;
+
+// ===== TABLERO =====
+// Usamos string JSON para evitar problemas de arrays en Firebase
+function boardToStr(board) { return JSON.stringify(board); }
+function strToBoard(s) { return JSON.parse(s); }
+
+function initBoard() {
+  const b = [];
+  for(let r=0;r<8;r++){
+    b[r]=[];
+    for(let c=0;c<8;c++){
+      if((r+c)%2===1){
+        if(r<3)      b[r][c]={color:"black",king:false};
+        else if(r>4) b[r][c]={color:"white",king:false};
+        else         b[r][c]=null;
+      } else b[r][c]=null;
+    }
+  }
+  return b;
+}
+
+// ===== LOBBY =====
+window.selectPiece = el => {
+  document.querySelectorAll(".piece-opt").forEach(b=>b.classList.remove("selected"));
+  el.classList.add("selected");
+  myColor = el.dataset.color;
+};
+
+window.createRoom = async () => {
+  myName  = document.getElementById("player-name").value.trim() || "Cris";
+  myColor = document.querySelector(".piece-opt.selected").dataset.color;
+  myRole  = "host";
+  roomId  = Math.floor(1000+Math.random()*9000).toString();
+
+  await set(ref(db,`damas/${roomId}`),{
+    boardStr: boardToStr(initBoard()),
+    turn: "white",
+    status: "waiting",
+    host: {name:myName, color:myColor}
+  });
+
+  document.getElementById("room-code-text").textContent = roomId;
+  document.getElementById("room-display").style.display = "block";
+  listenRoom();
+};
+
+window.joinRoom = async () => {
+  myName = document.getElementById("player-name").value.trim() || "Amigo";
+  roomId = document.getElementById("room-input").value.trim();
+  if(roomId.length!==4){toast("❌ Código inválido");return;}
+  const snap = await get(ref(db,`damas/${roomId}`));
+  if(!snap.exists()){toast("❌ Sala no encontrada");return;}
+  const data = snap.val();
+  if(data.status==="playing"){toast("❌ Sala llena");return;}
+  myColor = data.host.color==="white" ? "black" : "white";
+  myRole  = "guest";
+  await update(ref(db,`damas/${roomId}`),{guest:{name:myName,color:myColor},status:"playing"});
+  listenRoom();
+};
+
+// ===== FIREBASE LISTENER =====
+function listenRoom() {
+  onValue(ref(db,`damas/${roomId}`), snap=>{
+    if(!snap.exists()) return;
+    const data = snap.val();
+    gameState  = data;
+
+    if(data.status==="playing" && document.getElementById("lobby").style.display!=="none"){
+      startGame(data);
+    }
+
+    if(data.status==="playing"||data.status==="won"){
+      myTurn   = (data.turn===myColor);
+      selected = null;
+      const board = strToBoard(data.boardStr);
+      render(board, data);
+    }
+
+    if(data.status==="won") showWin(data.winner===myColor);
+  });
+}
+
+// ===== INICIAR JUEGO =====
+function startGame(data) {
+  document.getElementById("lobby").style.display = "none";
+  document.getElementById("game").style.display  = "block";
+  const opp = myRole==="host" ? data.guest : data.host;
+  document.getElementById("my-dot").style.background  = myColor==="white"?"#e8e0d0":"#222";
+  document.getElementById("opp-dot").style.background = myColor==="white"?"#222":"#e8e0d0";
+  document.getElementById("my-name-label").textContent  = myName;
+  document.getElementById("opp-name-label").textContent = opp ? opp.name : "Rival";
+  myTurn = (data.turn===myColor);
+  const board = strToBoard(data.boardStr);
+  render(board, data);
+}
+
+// ===== RENDER =====
+function render(board, data) {
+  drawBoard(board);
+  updateUI(board, data);
+}
+
+function updateUI(board, data) {
+  let mine=0, opp=0;
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p=board[r][c];
+    if(!p) continue;
+    if(p.color===myColor) mine++; else opp++;
+  }
+  document.getElementById("my-count").textContent  = mine;
+  document.getElementById("opp-count").textContent = opp;
+
+  const oppData = myRole==="host" ? data.guest : data.host;
+  const oppName = oppData ? oppData.name : "Rival";
+
+  if(myTurn){
+    document.getElementById("turn-label").textContent  = "⚔️ Tu turno";
+    document.getElementById("status-msg").textContent  = "Selecciona una pieza para mover";
+  } else {
+    document.getElementById("turn-label").textContent  = `⏳ Turno de ${oppName}`;
+    document.getElementById("status-msg").textContent  = `Esperando a ${oppName}...`;
+  }
+}
+
+// ===== CLICK =====
+window.handleClick = e => {
+  if(!myTurn||!gameState) return;
+  const rect=canvas.getBoundingClientRect();
+  const cs=canvas.width/8;
+  let r=Math.floor((e.clientY-rect.top)*(canvas.height/rect.height)/cs);
+  let c=Math.floor((e.clientX-rect.left)*(canvas.width/rect.width)/cs);
+  if(myColor==="black"){r=7-r;c=7-c;}
+
+  const board = strToBoard(gameState.boardStr);
+  const cell  = board[r]?.[c];
+  const isMine = cell && cell.color===myColor;
+
+  if(!selected){
+    if(!isMine) return;
+    const forced=getForcedPieces(board,myColor);
+    if(forced.length>0 && !forced.some(([fr,fc])=>fr===r&&fc===c)){
+      toast("⚠️ ¡Debes capturar primero!"); return;
+    }
+    selected=[r,c];
+    drawBoard(board);
+    return;
+  }
+
+  const [sr,sc]=selected;
+  if(isMine){
+    const forced=getForcedPieces(board,myColor);
+    if(forced.length>0 && !forced.some(([fr,fc])=>fr===r&&fc===c)){
+      toast("⚠️ ¡Debes capturar primero!"); return;
+    }
+    selected=[r,c];
+    drawBoard(board);
+    return;
+  }
+
+  const piece=board[sr][sc];
+  const caps =getCaptures(sr,sc,piece,board);
+  const moves=caps.length>0?[]:getMoves(sr,sc,piece,board);
+
+  if(caps.some(([tr,tc])=>tr===r&&tc===c))       doCapture(sr,sc,r,c,board);
+  else if(moves.some(([tr,tc])=>tr===r&&tc===c)) doMove(sr,sc,r,c,board);
+  else { selected=null; drawBoard(board); }
+};
+
+// ===== MOVER =====
+async function doMove(sr,sc,tr,tc,board){
+  const nb=deepCopy(board);
+  nb[tr][tc]=nb[sr][sc];
+  nb[sr][sc]=null;
+  promote(nb,tr,tc);
+  const winner=checkWin(nb);
+  const next=myColor==="white"?"black":"white";
+  const upd={boardStr:boardToStr(nb),turn:next};
+  if(winner){upd.status="won";upd.winner=winner;}
+  selected=null;
+  await update(ref(db,`damas/${roomId}`),upd);
+}
+
+// ===== CAPTURAR =====
+async function doCapture(sr,sc,tr,tc,board){
+  const nb=deepCopy(board);
+  const mr=(sr+tr)/2, mc=(sc+tc)/2;
+  nb[tr][tc]=nb[sr][sc];
+  nb[sr][sc]=null;
+  nb[mr][mc]=null;
+  promote(nb,tr,tc);
+
+  const moreCaps=getCaptures(tr,tc,nb[tr][tc],nb);
+  if(moreCaps.length>0){
+    gameState.boardStr=boardToStr(nb);
+    selected=[tr,tc];
+    drawBoard(nb);
+    await update(ref(db,`damas/${roomId}`),{boardStr:boardToStr(nb)});
+    toast("💥 ¡Sigue capturando!");
+    return;
+  }
+
+  const winner=checkWin(nb);
+  const next=myColor==="white"?"black":"white";
+  const upd={boardStr:boardToStr(nb),turn:next};
+  if(winner){upd.status="won";upd.winner=winner;}
+  selected=null;
+  await update(ref(db,`damas/${roomId}`),upd);
+}
+
+// ===== REGLAS =====
+function getMoves(r,c,piece,board){
+  const dirs=piece.king?[[-1,-1],[-1,1],[1,-1],[1,1]]:piece.color==="white"?[[-1,-1],[-1,1]]:[[1,-1],[1,1]];
+  return dirs.map(([dr,dc])=>[r+dr,c+dc]).filter(([tr,tc])=>tr>=0&&tr<8&&tc>=0&&tc<8&&!board[tr][tc]);
+}
+
+function getCaptures(r,c,piece,board){
+  const dirs=piece.king?[[-1,-1],[-1,1],[1,-1],[1,1]]:piece.color==="white"?[[-1,-1],[-1,1]]:[[1,-1],[1,1]];
+  const caps=[];
+  for(const[dr,dc]of dirs){
+    const mr=r+dr,mc=c+dc,tr=r+dr*2,tc=c+dc*2;
+    if(tr<0||tr>=8||tc<0||tc>=8) continue;
+    const mid=board[mr]?.[mc], dst=board[tr]?.[tc];
+    if(mid&&mid.color!==piece.color&&!dst) caps.push([tr,tc]);
+  }
+  return caps;
+}
+
+function getForcedPieces(board,color){
+  const f=[];
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p=board[r][c];
+    if(p&&p.color===color&&getCaptures(r,c,p,board).length>0) f.push([r,c]);
+  }
+  return f;
+}
+
+function promote(board,r,c){
+  const p=board[r][c];
+  if(!p) return;
+  if(p.color==="white"&&r===0) p.king=true;
+  if(p.color==="black"&&r===7) p.king=true;
+}
+
+function checkWin(board){
+  let w=0,b=0;
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p=board[r][c];
+    if(!p) continue;
+    if(p.color==="white") w++; else b++;
+  }
+  if(w===0) return "black";
+  if(b===0) return "white";
+  if(!canAnyMove(board,"white")) return "black";
+  if(!canAnyMove(board,"black")) return "white";
+  return null;
+}
+
+function canAnyMove(board,color){
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const p=board[r][c];
+    if(p&&p.color===color&&(getCaptures(r,c,p,board).length>0||getMoves(r,c,p,board).length>0)) return true;
+  }
+  return false;
+}
+
+function deepCopy(b){return JSON.parse(JSON.stringify(b));}
+
+// ===== DIBUJAR =====
+function drawBoard(board){
+  const W=canvas.width, cs=W/8;
+  ctx.clearRect(0,0,W,W);
+
+  for(let r=0;r<8;r++) for(let c=0;c<8;c++){
+    const dr=myColor==="black"?7-r:r, dc=myColor==="black"?7-c:c;
+    const x=c*cs, y=r*cs, dark=(dr+dc)%2===1;
+    const g=ctx.createLinearGradient(x,y,x+cs,y+cs);
+    if(dark){g.addColorStop(0,"#2a1600");g.addColorStop(1,"#1a0c00");}
+    else{g.addColorStop(0,"#f5e6c8");g.addColorStop(1,"#e8d4a8");}
+    ctx.fillStyle=g; ctx.fillRect(x,y,cs,cs);
+    ctx.strokeStyle=dark?"rgba(0,0,0,.3)":"rgba(255,255,255,.1)";
+    ctx.lineWidth=.5; ctx.strokeRect(x,y,cs,cs);
+  }
+
+  if(selected&&myTurn){
+    const[sr,sc]=selected;
+    const dr=myColor==="black"?7-sr:sr, dc=myColor==="black"?7-sc:sc;
+    ctx.fillStyle="rgba(240,192,64,.4)";
+    ctx.fillRect(dc*cs,dr*cs,cs,cs);
+    ctx.strokeStyle="#f0c040"; ctx.lineWidth=2.5;
+    ctx.strokeRect(dc*cs+1,dr*cs+1,cs-2,cs-2);
+    const piece=board[sr][sc];
+    if(piece){
+      const caps=getCaptures(sr,sc,piece,board);
+      const hints=caps.length>0?caps:getMoves(sr,sc,piece,board);
+      hints.forEach(([hr,hc])=>{
+        const hdr=myColor==="black"?7-hr:hr, hdc=myColor==="black"?7-hc:hc;
+        ctx.beginPath();
+        ctx.arc(hdc*cs+cs/2,hdr*cs+cs/2,cs*.2,0,Math.PI*2);
+        ctx.fillStyle=caps.length>0?"rgba(255,80,80,.6)":"rgba(240,192,64,.5)";
+        ctx.fill();
+      });
+    }
+  }
+
+  if(myTurn){
+    getForcedPieces(board,myColor).forEach(([fr,fc])=>{
+      if(selected&&selected[0]===fr&&selected[1]===fc) return;
+      const dr=myColor==="black"?7-fr:fr, dc=myColor==="black"?7-fc:fc;
+      ctx.strokeStyle="#ff4444"; ctx.
