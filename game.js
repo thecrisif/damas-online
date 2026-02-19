@@ -96,6 +96,19 @@ window.joinRoom = async function() {
 // ============================================================
 // ESTADO INICIAL DEL TABLERO
 // ============================================================
+// Firebase convierte arrays a objetos, esto los convierte de vuelta
+function fixBoard(board) {
+  if(!board) return buildInitialState().board;
+  const fixed = [];
+  for(let r = 0; r < ROWS; r++) {
+    fixed[r] = [];
+    for(let c = 0; c < COLS; c++) {
+      fixed[r][c] = (board[r] && board[r][c]) ? board[r][c] : null;
+    }
+  }
+  return fixed;
+}
+
 function buildInitialState() {
   // board[r][c] = null | { color:"white"|"black", king:false }
   const board = [];
@@ -130,6 +143,7 @@ function listenRoom() {
     if(data.status === "playing" || data.status === "won") {
       myTurn = data.turn === myColor;
       selected = null;
+      data.board = fixBoard(data.board);
       forcedCaptures = myTurn ? getCapturablePieces(data.board, myColor) : [];
       drawBoard(data.board);
       updateUI(data);
@@ -592,11 +606,4 @@ function showToast(msg) {
 }
 window.showToast = showToast;
 
-// ============================================================
-// UTILIDADES
-// ============================================================
-function inBounds(r, c) { return r>=0 && r<ROWS && c>=0 && c<COLS; }
-function deepCopy(obj)  { return JSON.parse(JSON.stringify(obj)); }
-
-// Dibujo inicial vacío
-drawBoard(buildInitialState().board);
+// =========================
